@@ -1,5 +1,4 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { IsArray, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { CreateQuestionDto } from './create-questions.dto';

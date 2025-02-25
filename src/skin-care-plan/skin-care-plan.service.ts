@@ -105,24 +105,4 @@ export class SkinCarePlanService {
     }
     return products;
   }
-
-  create(createSkinCarePlanDto: CreateSkinCarePlanDto) {
-    return 'This action adds a new skinCarePlan';
-  }
-
-  findAll() {
-    return `This action returns all skinCarePlan`;
-  }
-
-  findOne(id: number) {
-    return `This action returns a #${id} skinCarePlan`;
-  }
-
-  update(id: number, updateSkinCarePlanDto: UpdateSkinCarePlanDto) {
-    return `This action updates a #${id} skinCarePlan`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} skinCarePlan`;
-  }
 }
