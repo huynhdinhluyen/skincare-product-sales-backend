@@ -1,14 +1,24 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { SignupDto } from '../user/dto/signup.dto';
 import * as bcrypt from 'bcryptjs';
 import { UserDetails } from '../user/user-details.interface';
 import { UserService } from '../user/user.service';
 import { LoginDto } from 'src/user/dto/login.dto';
+import { UpdateUserDto } from 'src/user/dto/update-profile.dto';
+import { User, UserDocument } from './schema/user.schema';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 
 @Injectable()
 export class AuthService {
   constructor(
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
     private userService: UserService,
     private jwtService: JwtService,
   ) {}
@@ -115,5 +125,22 @@ export class AuthService {
 
     const jwt = await this.jwtService.sign(payload);
     return { token: jwt };
+  }
+
+  async updateProfile(
+    userId: string,
+    updateData: UpdateUserDto,
+  ): Promise<User> {
+    const updatedUser = await this.userModel.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { new: true, runValidators: true },
+    );
+
+    if (!updatedUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    return updatedUser;
   }
 }
