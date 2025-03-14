@@ -43,3 +43,10 @@ export class Product {
 
 export type ProductDocument = Product & Document;
 export const ProductSchema = SchemaFactory.createForClass(Product);
+ProductSchema.index({ name: 'text', description: 'text' }); // Text search index
+ProductSchema.index({ category: 1 }); // For category filtering
+ProductSchema.index({ price: 1 }); // For price filtering
+ProductSchema.index({ isActive: 1 }); // Since we query by isActive in most requests
+ProductSchema.index({ sold: -1 }); // For sorting by popularity
+ProductSchema.index({ createdAt: -1 }); // For sorting by newest
+ProductSchema.index({ name: 1 }); // For sorting alphabetically

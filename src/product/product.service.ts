@@ -1,22 +1,21 @@
 import {
-  Inject,
+  BadRequestException,
   Injectable,
   InternalServerErrorException,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-
 import { InjectModel } from '@nestjs/mongoose';
 import { Product, ProductDocument } from './schema/product.schema';
 import { Model } from 'mongoose';
-import { CreateProductDto } from './dto/create-product.dto';
-import { UpdateProductDto } from './dto/update-product.dto';
+import { UpdateProductDto } from './dto/request/update-product.dto';
 import {
   Category,
   CategoryDocument,
 } from 'src/category/schema/category.schema';
-import { Cache } from 'cache-manager';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { CreateProductDto } from './dto/request/create-product.dto';
+import { ProductFilterDto } from './dto/filter/product-filter.dto';
+import { CacheService } from '../common/services/cache.service';
 
 @Injectable()
 export class ProductService {
@@ -27,136 +26,168 @@ export class ProductService {
     private readonly productModel: Model<ProductDocument>,
     @InjectModel(Category.name)
     private readonly categoryModel: Model<CategoryDocument>,
-    @Inject(CACHE_MANAGER)
-    private readonly cacheManager: Cache,
+    private readonly cacheService: CacheService,
   ) {}
-
-  async searchProducts(
-    query: string,
-    page: number = 1,
-    limit: number = 10,
-  ): Promise<{ data: Product[]; totalCount: number; totalPages: number }> {
-    try {
-      if (!query || query.trim() === '') {
-        return { data: [], totalCount: 0, totalPages: 0 };
-      }
-      const trimmedQuery = query.trim();
-      const regex = new RegExp(trimmedQuery, 'i');
-
-      const skip = (page - 1) * limit;
-
-      const [products, totalCount] = await Promise.all([
-        this.productModel
-          .find({ name: { $regex: regex }, isActive: true })
-          .skip(skip)
-          .limit(limit)
-          .lean()
-          .exec(),
-        this.productModel
-          .countDocuments({ name: { $regex: regex }, isActive: true })
-          .exec(),
-      ]);
-
-      const totalPages = Math.ceil(totalCount / limit);
-      return { data: products, totalCount, totalPages };
-    } catch (error) {
-      console.error('Error searching products:', error);
-      throw new InternalServerErrorException('Error searching products');
-    }
-  }
 
   async create(createProductDto: CreateProductDto): Promise<Product> {
     const category = await this.categoryModel.findById(
       createProductDto.category,
     );
-    if (!category) {
+    if (!category || !category.isActive) {
       throw new NotFoundException(
         `Category with ID ${createProductDto.category} not found`,
       );
     }
     const product = new this.productModel(createProductDto);
-    await this.cacheManager.reset();
+    await this.cacheService.reset();
     return product.save();
   }
 
   async findAll(
-    page: number = 1,
-    limit: number = 10,
+    filterDto: ProductFilterDto,
   ): Promise<{ data: any[]; totalCount: number; totalPages: number }> {
-    const cacheKey = `products:page=${page}:limit=${limit}`;
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      categoryId,
+      minPrice,
+      maxPrice,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+    } = filterDto;
 
-    try {
-      const cachedResult = await this.cacheManager.get<{
-        data: any[];
-        totalCount: number;
-        totalPages: number;
-      }>(cacheKey);
-      if (cachedResult) {
-        return cachedResult;
-      }
-    } catch (cacheError) {
-      this.logger.error(
-        `Cache error for products on page ${page}:`,
-        cacheError,
-      );
+    const cacheKey = `products:${JSON.stringify({
+      page,
+      limit,
+      search: search || '',
+      categoryId: categoryId || '',
+      minPrice: minPrice || 0,
+      maxPrice: maxPrice || 0,
+      sortBy,
+      sortOrder,
+    })}`;
+
+    const cachedResult = await this.cacheService.get<{
+      data: any[];
+      totalCount: number;
+      totalPages: number;
+    }>(cacheKey);
+
+    if (cachedResult) {
+      return cachedResult;
     }
 
-    const skip = (page - 1) * limit;
-    const [products, totalCount] = await Promise.all([
-      this.productModel
-        .find({ isActive: true })
-        .skip(skip)
-        .limit(limit)
-        .populate('promotionId', 'discountRate startDate endDate isActive')
-        .lean()
-        .exec(),
-      this.productModel.countDocuments({ isActive: true }).exec(),
-    ]);
-
-    const data = products.map((product) => this.applyPromotion(product));
-    const result = {
-      data,
-      totalCount,
-      totalPages: Math.ceil(totalCount / limit),
-    };
-
     try {
-      await this.cacheManager.set(cacheKey, result, 3600);
-    } catch (cacheSetError) {
-      this.logger.error(
-        `Error setting cache for products on page ${page}:`,
-        cacheSetError,
-      );
-    }
+      const filter: any = { isActive: true };
 
-    return result;
-  }
-
-  async getProductById(id: string): Promise<Product> {
-    const cacheKey = `product:${id}`;
-    let product: Product | null;
-
-    try {
-      product = await this.cacheManager.get<Product>(cacheKey);
-      if (!product) {
-        product = await this.findOne(id);
-        await this.cacheManager.set(cacheKey, product, 3600);
+      if (search) {
+        filter.$or = [
+          { name: { $regex: search, $options: 'i' } },
+          { description: { $regex: search, $options: 'i' } },
+        ];
       }
+
+      if (categoryId) {
+        filter.category = categoryId;
+      }
+
+      if (minPrice !== undefined) {
+        filter.price = { $gte: minPrice };
+      }
+
+      if (maxPrice !== undefined) {
+        if (filter.price) {
+          filter.price.$lte = maxPrice;
+        } else {
+          filter.price = { $lte: maxPrice };
+        }
+      }
+
+      const sort: any = {};
+      sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+      const skip = (page - 1) * limit;
+
+      const [products, totalCount] = await Promise.all([
+        this.productModel
+          .find(filter)
+          .select(
+            'name brand images price stockQuantity sold description category promotionId capacity origin',
+          )
+          .sort(sort)
+          .skip(skip)
+          .limit(limit)
+          .populate('promotionId', 'discountRate startDate endDate isActive')
+          .populate('category', 'name')
+          .lean()
+          .exec(),
+        this.productModel.countDocuments(filter).exec(),
+      ]);
+
+      const data = products.map((product) => this.applyPromotion(product));
+
+      const result = {
+        data,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+      };
+
+      await this.cacheService.set(cacheKey, result, 3600);
+
+      return result;
     } catch (error) {
-      this.logger.error(`Cache error for product ${id}:`, error);
-      product = await this.findOne(id);
+      this.logger.error(`Error retrieving products:`, error);
+      throw new InternalServerErrorException('Failed to retrieve products');
     }
-    return product;
   }
 
-  async update(id: string, updateUserDto: UpdateProductDto): Promise<Product> {
-    const updatedProduct = await this.productModel
-      .findByIdAndUpdate(id, updateUserDto, { new: true })
+  async getProductById(id: string): Promise<any> {
+    const cacheKey = `product:${id}`;
+
+    const cachedProduct = await this.cacheService.get<any>(cacheKey);
+    if (cachedProduct) {
+      this.logger.debug(`Cache hit for product ${id}`);
+      return cachedProduct;
+    }
+
+    this.logger.debug(`Cache miss for product ${id}`);
+
+    const product = await this.productModel
+      .findById(id)
+      .select(
+        'name brand images price stockQuantity sold description category promotionId capacity origin createdAt updatedAt',
+      )
+      .populate('category', 'name _id')
+      .populate('promotionId', 'discountRate startDate endDate isActive')
+      .lean()
       .exec();
+
+    if (!product) {
+      throw new NotFoundException(`Product with ID ${id} not found`);
+    }
+
+    const processedProduct = this.applyPromotion(product);
+
+    await this.cacheService.set(cacheKey, processedProduct, 3600);
+
+    return processedProduct;
+  }
+
+  async update(
+    id: string,
+    updateProductDto: UpdateProductDto,
+  ): Promise<Product> {
+    const updatedProduct = await this.productModel
+      .findByIdAndUpdate(id, updateProductDto, { new: true })
+      .exec();
+
     if (!updatedProduct || !updatedProduct.isActive) {
       throw new NotFoundException(`Product with ${id} not found`);
     }
-    await this.cacheManager.reset();
+
+    await this.cacheService.invalidateProductCache(id);
+
     return updatedProduct;
   }
 
@@ -165,25 +196,67 @@ export class ProductService {
     if (!product) {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
+
     product.isActive = false;
-    await this.cacheManager.reset();
-    return product.save();
+    const result = await product.save();
+
+    await this.cacheService.invalidateProductCache(id);
+
+    return result;
+  }
+
+  async compareProducts(productIds: string[]): Promise<any[]> {
+    // Validate that we have 2-4 products to compare
+    if (productIds.length < 2 || productIds.length > 4) {
+      throw new BadRequestException(
+        'Please select between 2 and 4 products to compare',
+      );
+    }
+
+    // Get all products with their details
+    const products = await this.productModel
+      .find({ _id: { $in: productIds }, isActive: true })
+      .populate('category', 'name')
+      .populate('promotionId', 'discountRate startDate endDate isActive')
+      .lean()
+      .exec();
+
+    if (!products || products.length === 0) {
+      throw new NotFoundException('No products found for comparison');
+    }
+
+    if (products.length !== productIds.length) {
+      throw new NotFoundException('One or more products not found or inactive');
+    }
+
+    // Process products to add discounted prices
+    const processedProducts = products.map((product) =>
+      this.applyPromotion(product),
+    );
+
+    // Format product data for comparison
+    return this.formatProductsForComparison(processedProducts);
   }
 
   private applyPromotion(product: any): any {
     if (product.promotionId && product.promotionId.isActive) {
       const now = new Date();
-      const { discountRate, startDate, endDate } = product.promotionId;
-      if (now >= new Date(startDate) && now <= new Date(endDate)) {
+      const startDate = new Date(product.promotionId.startDate);
+      const endDate = new Date(product.promotionId.endDate);
+
+      if (now >= startDate && now <= endDate) {
+        const discountRate = product.promotionId.discountRate || 0;
         const discountedPrice =
           product.price - (product.price * discountRate) / 100;
+
         return {
           ...product,
           originalPrice: product.price,
-          discountedPrice: Math.max(0, discountedPrice),
+          discountedPrice: Math.round(discountedPrice * 100) / 100, // Round to 2 decimal places
         };
       }
     }
+
     return {
       ...product,
       originalPrice: product.price,
@@ -191,16 +264,24 @@ export class ProductService {
     };
   }
 
-  private async findOne(id: string): Promise<Product> {
-    try {
-      const product = await this.productModel.findById(id).exec();
-      if (!product || !product.isActive) {
-        throw new NotFoundException(`Product with ${id} not found`);
-      }
-      return product;
-    } catch (error) {
-      this.logger.error(`Error finding product with ID ${id}:`, error);
-      throw error;
-    }
+  private formatProductsForComparison(products: any[]): any[] {
+    // Process products for comparison with all relevant attributes
+    return products.map((product) => ({
+      _id: product._id,
+      name: product.name,
+      brand: product.brand,
+      images: product.images,
+      origin: product.origin,
+      capacity: product.capacity,
+      originalPrice: product.originalPrice,
+      discountedPrice: product.discountedPrice,
+      stockQuantity: product.stockQuantity,
+      sold: product.sold,
+      description: product.description,
+      category: product.category ? product.category.name : 'N/A',
+      promotion: product.promotionId
+        ? `${product.promotionId.discountRate}% off`
+        : 'No promotion',
+    }));
   }
 }
