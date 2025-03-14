@@ -26,8 +26,8 @@ import { SkinCarePlanModule } from './skin-care-plan/skin-care-plan.module';
     }),
     CacheModule.register({
       isGlobal: true,
-      ttl: 3600,
-      max: 100,
+      ttl: 3600, // 1 hour cache expiration
+      max: 1000, // Maximum number of items in cache
     }),
     ThrottlerModule.forRoot([
       {
@@ -35,7 +35,7 @@ import { SkinCarePlanModule } from './skin-care-plan/skin-care-plan.module';
         limit: 100,
       },
     ]),
-    MongooseModule.forRoot(process.env.DB_URI),
+    MongooseModule.forRoot(process.env.DB_URI, { autoIndex: true }),
     ProductModule,
     CategoryModule,
     AuthModule,

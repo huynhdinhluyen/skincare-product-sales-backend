@@ -3,7 +3,7 @@ import { SignupDto } from 'src/user/dto/signup.dto';
 import { UserDetails } from 'src/user/user-details.interface';
 import { AuthService } from './auth.service';
 import { LoginDto } from 'src/user/dto/login.dto';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { UpdateUserDto } from 'src/user/dto/update-profile.dto';
 import { UserService } from 'src/user/user.service';
@@ -22,6 +22,10 @@ export class AuthController {
   }
 
   @Post('login')
+  @ApiOperation({
+    summary: 'User login',
+    description: 'Authenticates a user and returns a JWT token',
+  })
   login(@Body() user: LoginDto): Promise<{ token: string }> {
     return this.authService.login(user);
   }

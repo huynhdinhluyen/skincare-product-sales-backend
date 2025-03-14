@@ -3,6 +3,7 @@ import { QuestionsController } from './questions.controller';
 import { QuestionsService } from './questions.service';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Question, QuestionSchema } from './schema/question.schema';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { Question, QuestionSchema } from './schema/question.schema';
         schema: QuestionSchema,
       },
     ]),
+    AuthModule,
   ],
   controllers: [QuestionsController],
   providers: [QuestionsService],

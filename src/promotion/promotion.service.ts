@@ -7,8 +7,8 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Promotion, PromotionDocument } from './schema/promotion.schema';
-import { CreatePromotionDto } from './dto/create-promotion.dto';
-import { UpdatePromotionDto } from './dto/update-promotion.dto';
+import { CreatePromotionDto } from './dto/request/create-promotion.dto';
+import { UpdatePromotionDto } from './dto/request/update-promotion.dto';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()

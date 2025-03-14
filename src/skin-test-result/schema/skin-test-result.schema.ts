@@ -9,8 +9,14 @@ export class SkinTestResult {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: false })
   userId: User;
 
+  @Prop({ type: Array, required: true })
+  answers: {
+    questionId: string;
+    optionIndex: number;
+  }[];
+
   @Prop({ required: true })
-  totalScore: number;
+  score: number;
 
   @Prop({ required: true })
   skinType: string;

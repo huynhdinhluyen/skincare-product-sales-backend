@@ -70,15 +70,6 @@ export class CreateProductDto {
   })
   stockQuantity?: number;
 
-  @IsNumber()
-  @IsOptional()
-  @ApiProperty({
-    example: 25,
-    description: 'Number of units sold',
-    required: false,
-  })
-  sold?: number;
-
   @IsString()
   @IsOptional()
   @ApiProperty({
