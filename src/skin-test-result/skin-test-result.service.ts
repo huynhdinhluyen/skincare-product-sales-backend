@@ -1,85 +1,126 @@
-import { SaveSkinTestResultDto } from './dto/skin-type-result.dto';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import {
   SkinTestResult,
   SkinTestResultDocument,
 } from './schema/skin-test-result.schema';
-import { Model } from 'mongoose';
+import { SaveSkinTestResultDto } from './dto/skin-type-result.dto';
 import {
   Question,
   QuestionDocument,
-} from 'src/questions/schema/question.schema';
-import { User, UserDocument } from 'src/auth/schema/user.schema';
+} from '../questions/schema/question.schema';
+import { User, UserDocument } from '../auth/schema/user.schema';
+import { CacheService } from '../common/services/cache.service';
+import { SkinType } from '../skin-care-plan/enum/skin-type.enum';
 
 @Injectable()
 export class SkinTestResultService {
   constructor(
     @InjectModel(SkinTestResult.name)
-    private skinTestResultModel: Model<SkinTestResultDocument>,
-    @InjectModel(Question.name) private questionModel: Model<QuestionDocument>,
-    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    private readonly skinTestResultModel: Model<SkinTestResultDocument>,
+    @InjectModel(Question.name)
+    private readonly questionModel: Model<QuestionDocument>,
+    @InjectModel(User.name)
+    private readonly userModel: Model<UserDocument>,
+    private readonly cacheService: CacheService,
   ) {}
 
-  async calculateSkinType(
-    saveSkinTestResultDto: SaveSkinTestResultDto,
-  ): Promise<string> {
-    const questionIds = saveSkinTestResultDto.answers.map(
-      (answer) => answer.questionId,
-    );
+  async saveSkinTestResult(
+    dto: SaveSkinTestResultDto,
+  ): Promise<SkinTestResult> {
+    const { userId, answers } = dto;
 
-    const questions = await this.questionModel.find({
-      _id: { $in: questionIds },
-    });
-
-    if (questions.length !== questionIds.length) {
-      throw new BadRequestException('One or more questions not found');
+    // Validate user exists
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
     }
 
-    let totalScore = 0;
+    const questionIds = answers.map((answer) => answer.questionId);
+    const questions = await this.questionModel
+      .find({
+        _id: { $in: questionIds },
+      })
+      .lean();
 
-    for (const answer of saveSkinTestResultDto.answers) {
+    if (questions.length !== questionIds.length) {
+      throw new NotFoundException('One or more questions not found');
+    }
+
+    // Calculate total score
+    let totalScore = 0;
+    for (const answer of answers) {
       const question = questions.find(
         (q) => q._id.toString() === answer.questionId,
       );
-
-      if (!question) {
-        throw new BadRequestException(
-          `Question with ID ${answer.questionId} not found`,
+      if (!question || !question.options[answer.optionIndex]) {
+        throw new NotFoundException(
+          `Option not found for question ${answer.questionId}`,
         );
       }
 
-      const option = question.options[answer.optionIndex];
-
-      if (!option) {
-        throw new BadRequestException(
-          `Invalid option index ${answer.optionIndex} for question ${answer.questionId}`,
-        );
-      }
-
-      totalScore += option.point;
+      totalScore += question.options[answer.optionIndex].point;
     }
 
+    // Determine skin type - using uppercase English
     const skinType = this.determineSkinType(totalScore);
 
-    const result = await this.skinTestResultModel.findOneAndUpdate(
-      { userId: saveSkinTestResultDto.userId },
-      { userId: saveSkinTestResultDto.userId, totalScore, skinType },
-      { new: true, upsert: true },
-    );
+    // Save or update test result
+    let skinTestResult = await this.skinTestResultModel.findOne({ userId });
+
+    if (skinTestResult) {
+      skinTestResult.answers = answers;
+      skinTestResult.score = totalScore;
+      skinTestResult.skinType = skinType;
+    } else {
+      skinTestResult = new this.skinTestResultModel({
+        userId,
+        answers,
+        score: totalScore,
+        skinType,
+      });
+    }
+
+    const savedResult = await skinTestResult.save();
+
+    // Invalidate any cached results for this user
+    await this.cacheService.del(`skin-test-result:${userId}`);
+
+    return savedResult;
+  }
+
+  async getUserSkinType(userId: string): Promise<string> {
+    // Try to get from cache
+    const cacheKey = `skin-test-result:${userId}`;
+    const cachedResult = await this.cacheService.get<string>(cacheKey);
+
+    if (cachedResult) {
+      return cachedResult;
+    }
+
+    // Get from database
+    const result = await this.skinTestResultModel.findOne({ userId }).lean();
+
+    if (!result) {
+      throw new NotFoundException('No skin test result found for this user');
+    }
+
+    // Cache the result
+    await this.cacheService.set(cacheKey, result.skinType, 86400); // Cache for 24 hours
 
     return result.skinType;
   }
 
   private determineSkinType(score: number): string {
     if (score >= 20) {
-      return 'Da dầu';
+      return SkinType.OILY;
     } else if (score >= 15) {
-      return 'Da hỗn hợp';
+      return SkinType.COMBINATION;
     } else if (score >= 10) {
-      return 'Da thường';
+      return SkinType.NORMAL;
     } else {
-      return 'Da khô';
+      return SkinType.DRY;
     }
   }
 }

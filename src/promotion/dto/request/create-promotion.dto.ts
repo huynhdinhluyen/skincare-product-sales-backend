@@ -3,7 +3,6 @@ import {
   IsDateString,
   IsNotEmpty,
   IsNumber,
-  IsOptional,
   IsString,
   Max,
   Min,
@@ -34,7 +33,4 @@ export class CreatePromotionDto {
     example: 'date',
   })
   endDate: Date;
-
-  @IsOptional()
-  isActive?: boolean;
 }
