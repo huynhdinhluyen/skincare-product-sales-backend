@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Cart, CartDocument } from './schema/cart.schema';
 import { Model } from 'mongoose';
@@ -9,63 +13,90 @@ import { UpdateCartDto } from './dto/update-cart.dto';
 @Injectable()
 export class CartService {
   constructor(
-    @InjectModel(Cart.name)
-    private readonly cartModel: Model<CartDocument>,
+    @InjectModel(Cart.name) private readonly cartModel: Model<CartDocument>,
     @InjectModel(Product.name)
     private readonly productModel: Model<ProductDocument>,
   ) {}
 
   async getCart(userId: string): Promise<Cart> {
-    const cart = await this.cartModel.findOne({ userId });
-    if (!cart) {
-      throw new NotFoundException('Cart not found');
+    try {
+      const cart = await this.cartModel
+        .findOne({ user: userId })
+        .populate({
+          path: 'items.product',
+          select: 'name price images stockQuantity promotionId',
+          populate: {
+            path: 'promotionId',
+            select: 'discountRate startDate endDate isActive',
+          },
+        })
+        .lean()
+        .exec();
+
+      if (cart) {
+        return this.processCartItems(cart);
+      }
+
+      return await this.cartModel.create({
+        user: userId,
+        items: [],
+        totalPrice: 0,
+      });
+    } catch (error) {
+      if (error.name === 'ValidationError') {
+        throw new BadRequestException(
+          `Cart validation error: ${error.message}`,
+        );
+      }
+      throw error;
     }
-    return cart;
   }
 
   async addToCart(addToCartDto: AddToCartDto): Promise<Cart> {
-    const product = await this.productModel
-      .findOne({ _id: addToCartDto.productId })
-      .lean();
+    const { userId, productId, quantity } = addToCartDto;
 
+    const product = await this.productModel.findById(productId);
     if (!product) {
-      throw new NotFoundException('Product not found');
+      throw new NotFoundException(`Product with ID ${productId} not found`);
     }
 
-    let cart = await this.cartModel.findOne({ user: addToCartDto.userId });
+    if (product.stockQuantity < quantity) {
+      throw new Error(`Only ${product.stockQuantity} items available in stock`);
+    }
 
+    let cart = await this.cartModel.findOne({ user: userId });
     if (!cart) {
       cart = new this.cartModel({
-        user: addToCartDto.userId,
+        user: userId,
         items: [],
       });
     }
 
-    // check exist products
-    const existingItem = cart.items.find(
-      (item) => item.product.toString() === addToCartDto.productId,
+    const existingItemIndex = cart.items.findIndex(
+      (item) => item.product.toString() === productId,
     );
 
-    if (existingItem) {
-      existingItem.quantity += addToCartDto.quantity;
+    if (existingItemIndex > -1) {
+      const newQuantity = cart.items[existingItemIndex].quantity + quantity;
+      if (product.stockQuantity < newQuantity) {
+        throw new Error(
+          `Only ${product.stockQuantity} items available in stock`,
+        );
+      }
+      cart.items[existingItemIndex].quantity = newQuantity;
     } else {
       cart.items.push({
-        product: product,
-        quantity: addToCartDto.quantity,
+        product: productId as any,
+        quantity,
       });
     }
 
-    // Calculate total price
-    cart.totalPrice = await cart.items.reduce(async (sumPromise, item) => {
-      return (await sumPromise) + item.quantity * product.price; //
-    }, Promise.resolve(0));
-
+    await this.updateCartTotal(cart);
     return cart.save();
   }
 
   async removeFromCart(userId: string, productId: string): Promise<Cart> {
     const cart = await this.cartModel.findOne({ user: userId });
-
     if (!cart) {
       throw new NotFoundException('Cart not found');
     }
@@ -79,16 +110,7 @@ export class CartService {
     }
 
     cart.items.splice(existingItemIndex, 1);
-
-    cart.totalPrice = await cart.items.reduce(async (sumPromise, item) => {
-      const product = await this.productModel.findById(item.product).lean();
-
-      if (product) {
-        return (await sumPromise) + item.quantity * product.price;
-      }
-      return 0;
-    }, Promise.resolve(0));
-
+    await this.updateCartTotal(cart);
     return cart.save();
   }
 
@@ -97,30 +119,100 @@ export class CartService {
     productId: string,
     updateCartDto: UpdateCartDto,
   ): Promise<Cart> {
-    const cart = await this.cartModel.findOne({ user: userId });
+    const { quantity } = updateCartDto;
 
+    const product = await this.productModel.findById(productId);
+    if (!product) {
+      throw new NotFoundException(`Product with ID ${productId} not found`);
+    }
+
+    if (product.stockQuantity < quantity) {
+      throw new Error(`Only ${product.stockQuantity} items available in stock`);
+    }
+
+    const cart = await this.cartModel.findOne({ user: userId });
     if (!cart) {
       throw new NotFoundException('Cart not found');
     }
 
-    const item = cart.items.find(
+    const existingItemIndex = cart.items.findIndex(
       (item) => item.product.toString() === productId,
     );
 
-    if (!item) {
-      throw new NotFoundException('Item not found in cart');
+    if (existingItemIndex === -1) {
+      throw new NotFoundException('Product not found in cart');
     }
 
-    item.quantity = updateCartDto.quantity;
-    cart.totalPrice = await cart.items.reduce(async (sumPromise, item) => {
-      const product = await this.productModel.findById(item.product).lean();
+    cart.items[existingItemIndex].quantity = quantity;
+    await this.updateCartTotal(cart);
+    return cart.save();
+  }
+
+  private async updateCartTotal(cart: CartDocument): Promise<void> {
+    let totalPrice = 0;
+
+    for (const item of cart.items) {
+      const product = await this.productModel
+        .findById(item.product)
+        .populate('promotionId', 'discountRate startDate endDate isActive');
 
       if (product) {
-        return (await sumPromise) + item.quantity * product.price;
-      }
-      return 0;
-    }, Promise.resolve(0));
+        let itemPrice = product.price;
 
-    return cart.save();
+        if (product.promotionId && product.promotionId['isActive']) {
+          const now = new Date();
+          const startDate = new Date(product.promotionId['startDate']);
+          const endDate = new Date(product.promotionId['endDate']);
+
+          if (now >= startDate && now <= endDate) {
+            itemPrice =
+              product.price -
+              (product.price * product.promotionId['discountRate']) / 100;
+          }
+        }
+
+        totalPrice += itemPrice * item.quantity;
+      }
+    }
+
+    cart.totalPrice = Math.round(totalPrice * 100) / 100;
+  }
+
+  private processCartItems(cart: CartDocument): Cart {
+    const now = new Date();
+    const cartObject = cart.toObject();
+
+    cartObject.items = cartObject.items.map((item) => {
+      if (item.product.promotionId && item.product.promotionId.isActive) {
+        const startDate = new Date(item.product.promotionId.startDate);
+        const endDate = new Date(item.product.promotionId.endDate);
+
+        if (now >= startDate && now <= endDate) {
+          const discountedPrice =
+            item.product.price -
+            (item.product.price * item.product.promotionId.discountRate) / 100;
+
+          return {
+            ...item,
+            product: {
+              ...item.product,
+              originalPrice: item.product.price,
+              discountedPrice: Math.round(discountedPrice * 100) / 100,
+            },
+          };
+        }
+      }
+
+      return {
+        ...item,
+        product: {
+          ...item.product,
+          originalPrice: item.product.price,
+          discountedPrice: item.product.price,
+        },
+      };
+    });
+
+    return cartObject;
   }
 }

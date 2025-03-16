@@ -1,14 +1,14 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import mongoose, { Document } from 'mongoose';
+import mongoose, { Document, Types } from 'mongoose';
+import { Payment_Method } from '../enums/payment-method.enum';
 import { Payment_Status } from '../enums/transaction-status.enum';
-import { Payment_Method } from '../enums/transaction-method.enum';
 
 @Schema({
   timestamps: true,
 })
 export class Payment {
-  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Order', required: true })
-  order: mongoose.Schema.Types.ObjectId;
+  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Order', required: false })
+  order: Types.ObjectId;
 
   @Prop({
     type: String,

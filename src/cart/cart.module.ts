@@ -22,5 +22,6 @@ import { AuthModule } from 'src/auth/auth.module';
       useClass: ThrottlerGuard,
     },
   ],
+  exports: [CartService],
 })
 export class CartModule {}

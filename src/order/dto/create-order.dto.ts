@@ -5,14 +5,13 @@ import {
   IsMongoId,
   IsNotEmpty,
   IsNumber,
+  IsObject,
   IsOptional,
   Min,
   ValidateNested,
 } from 'class-validator';
 import { OrderItemDto } from './order-details.dto';
-import { Payment_Method } from 'src/transaction/enums/transaction-method.enum';
-import { Payment_Status } from 'src/transaction/enums/transaction-status.enum';
-import { Order_Status } from '../enums/order-status.enum';
+import { Payment_Method } from 'src/transaction/enums/payment-method.enum';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateOrderDto {
@@ -38,15 +37,6 @@ export class CreateOrderDto {
   })
   items: OrderItemDto[];
 
-  @IsOptional()
-  @IsEnum(Order_Status, { message: 'Invalid order status ' })
-  @ApiProperty({
-    example: 'PENDING',
-    description: 'Current status of the order',
-    enum: Order_Status,
-  })
-  orderStatus: Order_Status;
-
   @IsEnum(Payment_Method, { message: 'Invalid payment method' })
   @IsNotEmpty()
   @ApiProperty({
@@ -55,15 +45,6 @@ export class CreateOrderDto {
     enum: Payment_Method,
   })
   paymentMethod: Payment_Method;
-
-  @IsEnum(Payment_Status, { message: 'Invalid payment status' })
-  @IsOptional()
-  @ApiProperty({
-    example: 'UNPAID',
-    description: 'Current payment status of the order',
-    enum: Payment_Status,
-  })
-  paymentStatus: Payment_Status;
 
   @IsNumber()
   @Min(0)
@@ -80,4 +61,23 @@ export class CreateOrderDto {
     description: 'Discount applied to the order',
   })
   discount: number;
+
+  @IsObject()
+  @IsOptional()
+  @ApiProperty({
+    description: 'Shipping address information',
+    example: {
+      addressLine1: '123 Main St',
+      city: 'Hanoi',
+      province: 'Hanoi',
+      phone: '0123456789',
+    },
+  })
+  shippingAddress?: {
+    addressLine1: string;
+    addressLine2?: string;
+    city: string;
+    province: string;
+    phone: string;
+  };
 }
