@@ -19,7 +19,6 @@ export class ErrorHandlerService {
     }
 
     if (error.code === 11000) {
-      // Duplicate key error
       throw new ConflictException('Duplicate entry');
     }
 

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -16,12 +17,15 @@ import {
 import { CreateProductDto } from './dto/request/create-product.dto';
 import { ProductFilterDto } from './dto/filter/product-filter.dto';
 import { CacheService } from '../common/services/cache.service';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 
 @Injectable()
 export class ProductService {
   private readonly logger = new Logger(ProductService.name);
 
   constructor(
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
     @InjectModel(Product.name)
     private readonly productModel: Model<ProductDocument>,
     @InjectModel(Category.name)
@@ -143,9 +147,9 @@ export class ProductService {
   }
 
   async getProductById(id: string): Promise<any> {
-    const cacheKey = `product:${id}`;
+    const cacheKey = `product_${id}`;
 
-    const cachedProduct = await this.cacheService.get<any>(cacheKey);
+    const cachedProduct = await this.cacheManager.get<Product>(cacheKey);
     if (cachedProduct) {
       this.logger.debug(`Cache hit for product ${id}`);
       return cachedProduct;
@@ -169,7 +173,7 @@ export class ProductService {
 
     const processedProduct = this.applyPromotion(product);
 
-    await this.cacheService.set(cacheKey, processedProduct, 3600);
+    await this.cacheManager.set(cacheKey, product, 3600);
 
     return processedProduct;
   }
@@ -206,7 +210,6 @@ export class ProductService {
   }
 
   async compareProducts(productIds: string[]): Promise<any[]> {
-    // Validate that we have 2-4 products to compare
     if (productIds.length < 2 || productIds.length > 4) {
       throw new BadRequestException(
         'Please select between 2 and 4 products to compare',

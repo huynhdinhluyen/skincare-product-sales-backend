@@ -17,7 +17,7 @@ import { UpdateUserDto } from 'src/user/dto/update-profile.dto';
 import { UserService } from 'src/user/user.service';
 import { ChangePasswordDto } from 'src/user/dto/change-password.dto';
 
-@ApiTags('User')
+@ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
   constructor(

@@ -8,7 +8,6 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { SignupDto } from '../user/dto/signup.dto';
-import * as bcrypt from 'bcryptjs';
 import { UserDetails } from '../user/user-details.interface';
 import { UserService } from '../user/user.service';
 import { LoginDto } from 'src/user/dto/login.dto';
@@ -17,6 +16,7 @@ import { User, UserDocument } from './schema/user.schema';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ChangePasswordDto } from 'src/user/dto/change-password.dto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
