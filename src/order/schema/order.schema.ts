@@ -34,3 +34,4 @@ export class Order {
 
 export type OrderDocument = Order & Document;
 export const OrderSchema = SchemaFactory.createForClass(Order);
+OrderSchema.index({ createdAt: 1, orderStatus: 1 });
