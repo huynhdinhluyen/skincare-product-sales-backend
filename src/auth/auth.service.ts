@@ -1,8 +1,10 @@
 import {
+  BadRequestException,
   HttpException,
   HttpStatus,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { SignupDto } from '../user/dto/signup.dto';
@@ -14,6 +16,7 @@ import { UpdateUserDto } from 'src/user/dto/update-profile.dto';
 import { User, UserDocument } from './schema/user.schema';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { ChangePasswordDto } from 'src/user/dto/change-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -120,6 +123,8 @@ export class AuthService {
       email: user.email,
       fullName: user.fullName,
       phone: user.phone,
+      address: user.address,
+      city: user.city,
       role: user.role,
     };
 
@@ -142,5 +147,31 @@ export class AuthService {
     }
 
     return updatedUser;
+  }
+
+  async changePassword(
+    userId: string,
+    changePasswordDto: ChangePasswordDto,
+  ): Promise<User> {
+    const { oldPassword, newPassword } = changePasswordDto;
+
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) {
+      throw new UnauthorizedException('Old password is incorrect');
+    }
+
+    if (oldPassword === newPassword) {
+      throw new BadRequestException('Mật khẩu mới phải khác mật khẩu cũ');
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+
+    user.password = hashedNewPassword;
+    return user.save();
   }
 }
