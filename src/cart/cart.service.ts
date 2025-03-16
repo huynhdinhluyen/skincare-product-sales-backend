@@ -18,6 +18,51 @@ export class CartService {
     private readonly productModel: Model<ProductDocument>,
   ) {}
 
+  async addToCart(addToCartDto: AddToCartDto): Promise<Cart> {
+    const { userId, productId, quantity } = addToCartDto;
+
+    const product = await this.productModel.findById(productId);
+    if (!product) {
+      throw new NotFoundException(`Product with ID ${productId} not found`);
+    }
+
+    if (product.stockQuantity < quantity) {
+      throw new BadRequestException(
+        `Not enough stock for product ${product.name}. Available: ${product.stockQuantity}`,
+      );
+    }
+
+    let cart = await this.cartModel.findOne({ user: userId });
+    if (!cart) {
+      cart = new this.cartModel({
+        user: userId,
+        items: [],
+      });
+    }
+
+    const existingItemIndex = cart.items.findIndex(
+      (item) => item.product.toString() === productId,
+    );
+
+    if (existingItemIndex > -1) {
+      const newQuantity = cart.items[existingItemIndex].quantity + quantity;
+      if (product.stockQuantity < newQuantity) {
+        throw new BadRequestException(
+          `Cannot add more items. Only ${product.stockQuantity} units of ${product.name} are available in stock (${cart.items[existingItemIndex].quantity} already in cart)`,
+        );
+      }
+      cart.items[existingItemIndex].quantity = newQuantity;
+    } else {
+      cart.items.push({
+        product: productId as any,
+        quantity,
+      });
+    }
+
+    await this.updateCartTotal(cart);
+    return cart.save();
+  }
+
   async getCart(userId: string): Promise<Cart> {
     try {
       const cart = await this.cartModel
@@ -52,68 +97,6 @@ export class CartService {
     }
   }
 
-  async addToCart(addToCartDto: AddToCartDto): Promise<Cart> {
-    const { userId, productId, quantity } = addToCartDto;
-
-    const product = await this.productModel.findById(productId);
-    if (!product) {
-      throw new NotFoundException(`Product with ID ${productId} not found`);
-    }
-
-    if (product.stockQuantity < quantity) {
-      throw new Error(`Only ${product.stockQuantity} items available in stock`);
-    }
-
-    let cart = await this.cartModel.findOne({ user: userId });
-    if (!cart) {
-      cart = new this.cartModel({
-        user: userId,
-        items: [],
-      });
-    }
-
-    const existingItemIndex = cart.items.findIndex(
-      (item) => item.product.toString() === productId,
-    );
-
-    if (existingItemIndex > -1) {
-      const newQuantity = cart.items[existingItemIndex].quantity + quantity;
-      if (product.stockQuantity < newQuantity) {
-        throw new Error(
-          `Only ${product.stockQuantity} items available in stock`,
-        );
-      }
-      cart.items[existingItemIndex].quantity = newQuantity;
-    } else {
-      cart.items.push({
-        product: productId as any,
-        quantity,
-      });
-    }
-
-    await this.updateCartTotal(cart);
-    return cart.save();
-  }
-
-  async removeFromCart(userId: string, productId: string): Promise<Cart> {
-    const cart = await this.cartModel.findOne({ user: userId });
-    if (!cart) {
-      throw new NotFoundException('Cart not found');
-    }
-
-    const existingItemIndex = cart.items.findIndex(
-      (item) => item.product.toString() === productId,
-    );
-
-    if (existingItemIndex === -1) {
-      throw new NotFoundException('Product not found in cart');
-    }
-
-    cart.items.splice(existingItemIndex, 1);
-    await this.updateCartTotal(cart);
-    return cart.save();
-  }
-
   async updateItemQuantity(
     userId: string,
     productId: string,
@@ -127,7 +110,9 @@ export class CartService {
     }
 
     if (product.stockQuantity < quantity) {
-      throw new Error(`Only ${product.stockQuantity} items available in stock`);
+      throw new BadRequestException(
+        `Not enough stock for product ${product.name}. Available: ${product.stockQuantity}`,
+      );
     }
 
     const cart = await this.cartModel.findOne({ user: userId });
@@ -176,6 +161,25 @@ export class CartService {
     }
 
     cart.totalPrice = Math.round(totalPrice * 100) / 100;
+  }
+
+  async removeFromCart(userId: string, productId: string): Promise<Cart> {
+    const cart = await this.cartModel.findOne({ user: userId });
+    if (!cart) {
+      throw new NotFoundException('Cart not found');
+    }
+
+    const existingItemIndex = cart.items.findIndex(
+      (item) => item.product.toString() === productId,
+    );
+
+    if (existingItemIndex === -1) {
+      throw new NotFoundException('Product not found in cart');
+    }
+
+    cart.items.splice(existingItemIndex, 1);
+    await this.updateCartTotal(cart);
+    return cart.save();
   }
 
   private processCartItems(cart: CartDocument): Cart {
