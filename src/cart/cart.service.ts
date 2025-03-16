@@ -182,9 +182,10 @@ export class CartService {
     return cart.save();
   }
 
-  private processCartItems(cart: CartDocument): Cart {
+  private processCartItems(cart: any): Cart {
     const now = new Date();
-    const cartObject = cart.toObject();
+    const cartObject =
+      typeof cart.toObject === 'function' ? cart.toObject() : cart;
 
     cartObject.items = cartObject.items.map((item) => {
       if (item.product.promotionId && item.product.promotionId.isActive) {
