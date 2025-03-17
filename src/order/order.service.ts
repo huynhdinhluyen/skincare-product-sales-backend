@@ -37,12 +37,10 @@ export class OrderService {
       throw new BadRequestException('Order must contain at least one item');
     }
 
-    // Prepare order details and validate products
     const orderDetails = [];
     let totalQuantity = 0;
     let totalPrice = 0;
 
-    // First, verify all products and calculate totals
     for (const item of items) {
       const product = await this.productModel
         .findById(item.productId)
@@ -89,7 +87,6 @@ export class OrderService {
     const finalTotalPrice = totalPrice + shippingFee - discount;
 
     try {
-      // Create the order
       const order = new this.orderModel({
         user: userId,
         items: orderDetails,
@@ -113,19 +110,16 @@ export class OrderService {
 
       const createdPayment = await payment.save();
 
-      // Update the order with the payment reference
       await this.orderModel.findByIdAndUpdate(createdOrder._id, {
         payment: createdPayment._id,
       });
 
-      // Update product stock quantities
       for (const item of items) {
         await this.productModel.findByIdAndUpdate(item.productId, {
           $inc: { stockQuantity: -item.quantity, sold: item.quantity },
         });
       }
 
-      // If the user has a cart, clear the purchased items
       try {
         const cart = await this.cartService.getCart(userId);
         if (cart && cart.items && cart.items.length > 0) {
@@ -238,7 +232,6 @@ export class OrderService {
 
       this.validateStatusTransition(order.orderStatus, status);
 
-      // Process COD payment when order is delivered
       if (status === Order_Status.DELIVERED) {
         const payment = await this.paymentModel.findById(order.payment);
         if (
@@ -250,11 +243,7 @@ export class OrderService {
           payment.paymentDate = new Date();
           await payment.save();
         }
-      }
-
-      // Return inventory if order is cancelled
-      else if (status === Order_Status.CANCELLED) {
-        // Only restock if the previous status was not DELIVERED or RETURNED
+      } else if (status === Order_Status.CANCELLED) {
         if (
           ![Order_Status.DELIVERED, Order_Status.RETURNED].includes(
             order.orderStatus,
@@ -332,7 +321,6 @@ export class OrderService {
         );
       }
 
-      // Return inventory for PENDING orders (already returned for CANCELLED)
       if (order.orderStatus === Order_Status.PENDING) {
         for (const item of order.items) {
           const product = await this.productModel.findById(item.productId);
