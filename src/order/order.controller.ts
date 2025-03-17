@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -93,7 +94,7 @@ export class OrderController {
       user.role !== Role.STAFF &&
       orderUserId !== user.id
     ) {
-      throw new Error('You can only view your own orders');
+      throw new BadRequestException('You can only view your own orders');
     }
 
     return order;
