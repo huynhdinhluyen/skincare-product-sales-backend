@@ -6,8 +6,6 @@ import * as qs from 'qs';
 
 @Injectable()
 export class VnPayService {
-  constructor(private configService: ConfigService) {}
-
   private readonly vnpTmnCode =
     this.configService.get<string>('VNPAY_TMN_CODE');
   private readonly vnpHashSecret =
@@ -15,6 +13,8 @@ export class VnPayService {
   private readonly vnpUrl = this.configService.get<string>('VNPAY_URL');
   private readonly vnpReturnUrl =
     this.configService.get<string>('VNPAY_RETURN_URL');
+
+  constructor(private configService: ConfigService) {}
 
   createPaymentUrl(orderId: string, amount: number, clientIp: string): string {
     // Set timezone to match VNPay

@@ -54,9 +54,8 @@ export class CreateProductDto {
   @IsOptional()
   @IsString()
   @ApiProperty({
-    example: [
+    example:
       'AHAs/Glycolic Acid, Anti-oxidants, BHAs/Salicylic Acid, Collagen, Fragrance-free, Paraben-free, Peptides, Squalane, Sulphate-free, Vitamins',
-    ],
     description: 'Product ingredients',
     required: false,
   })
