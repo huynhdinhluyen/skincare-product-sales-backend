@@ -17,6 +17,7 @@ import { Order_Status } from './enums/order-status.enum';
 import { CartService } from 'src/cart/cart.service';
 import { Payment_Method } from 'src/transaction/enums/payment-method.enum';
 import { Payment_Status } from 'src/transaction/enums/transaction-status.enum';
+import { OrderFilterDto, OrderSortBy } from './dto/filter/order-filter.dto';
 
 @Injectable()
 export class OrderService {
@@ -144,46 +145,73 @@ export class OrderService {
     }
   }
 
-  async getOrders(userId: string): Promise<Order[]> {
-    try {
-      const orders = await this.orderModel
-        .find({ user: userId })
-        .populate({
-          path: 'items.productId',
-          select: 'name images',
-        })
-        .populate('payment', 'paymentMethod paymentStatus amount paymentDate')
-        .sort({ createdAt: -1 });
-      return orders || [];
-    } catch (error) {
-      this.logger.error(`Failed to get orders: ${error.message}`, error.stack);
-      throw new BadRequestException('Failed to retrieve orders');
+  async getAllOrders(filterDto: OrderFilterDto): Promise<{
+    data: Order[];
+    totalCount: number;
+    totalPages: number;
+    currentPage: number;
+  }> {
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      userId,
+      sortBy = OrderSortBy.CREATED_DESC,
+    } = filterDto;
+    const skip = (page - 1) * limit;
+
+    const query: any = {};
+
+    if (status) {
+      query.orderStatus = status;
     }
-  }
 
-  async getOrdersByUserAndStatus(
-    userId: string,
-    status: Order_Status,
-  ): Promise<Order[]> {
+    if (userId) {
+      query.user = userId;
+    }
+
+    const sortOptions: any = {};
+    switch (sortBy) {
+      case OrderSortBy.CREATED_ASC:
+        sortOptions.createdAt = 1;
+        break;
+      case OrderSortBy.TOTAL_PRICE_DESC:
+        sortOptions.totalPrice = -1;
+        break;
+      case OrderSortBy.TOTAL_PRICE_ASC:
+        sortOptions.totalPrice = 1;
+        break;
+      case OrderSortBy.CREATED_DESC:
+      default:
+        sortOptions.createdAt = -1;
+        break;
+    }
+
     try {
-      if (!Object.values(Order_Status).includes(status)) {
-        throw new BadRequestException(`Invalid order status: ${status}`);
-      }
+      const [orders, totalCount] = await Promise.all([
+        this.orderModel
+          .find(query)
+          .skip(skip)
+          .limit(limit)
+          .sort(sortOptions)
+          .populate({
+            path: 'items.productId',
+            select: 'name images price',
+          })
+          .populate('payment', 'paymentMethod paymentStatus amount paymentDate')
+          .populate('user', 'fullName email phone')
+          .exec(),
+        this.orderModel.countDocuments(query),
+      ]);
 
-      return this.orderModel
-        .find({ user: userId, orderStatus: status })
-        .sort({ createdAt: -1 })
-        .populate('payment')
-        .populate({
-          path: 'items.productId',
-          select: 'name images price',
-        })
-        .exec();
+      return {
+        data: orders,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        currentPage: page,
+      };
     } catch (error) {
       this.logger.error(`Failed to get orders: ${error.message}`, error.stack);
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
       throw new BadRequestException('Failed to retrieve orders');
     }
   }
@@ -274,33 +302,6 @@ export class OrderService {
         throw error;
       }
       throw new BadRequestException('Failed to update order status');
-    }
-  }
-
-  async getOrderByStatus(status: Order_Status): Promise<Order[]> {
-    try {
-      if (!Object.values(Order_Status).includes(status)) {
-        throw new BadRequestException(`Invalid order status: ${status}`);
-      }
-
-      return this.orderModel
-        .find({ orderStatus: status })
-        .populate({
-          path: 'items.productId',
-          select: 'name images',
-        })
-        .populate('payment', 'paymentMethod paymentStatus amount')
-        .populate('user', 'fullName email phone')
-        .sort({ createdAt: -1 });
-    } catch (error) {
-      this.logger.error(
-        `Failed to get orders by status: ${error.message}`,
-        error.stack,
-      );
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      throw new BadRequestException('Failed to retrieve orders');
     }
   }
 
