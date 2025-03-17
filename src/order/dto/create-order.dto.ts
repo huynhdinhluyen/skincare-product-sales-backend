@@ -1,7 +1,6 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
-  IsEnum,
   IsMongoId,
   IsNotEmpty,
   IsNumber,
@@ -11,7 +10,6 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { OrderItemDto } from './order-details.dto';
-import { Payment_Method } from 'src/transaction/enums/payment-method.enum';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateOrderDto {
@@ -36,15 +34,6 @@ export class CreateOrderDto {
     description: 'List of products in the order',
   })
   items: OrderItemDto[];
-
-  @IsEnum(Payment_Method, { message: 'Invalid payment method' })
-  @IsNotEmpty()
-  @ApiProperty({
-    example: 'COD',
-    description: 'Payment method used for the order',
-    enum: Payment_Method,
-  })
-  paymentMethod: Payment_Method;
 
   @IsNumber()
   @Min(0)
