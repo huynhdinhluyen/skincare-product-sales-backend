@@ -1,14 +1,27 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { SignupDto } from '../user/dto/signup.dto';
-import * as bcrypt from 'bcryptjs';
 import { UserDetails } from '../user/user-details.interface';
 import { UserService } from '../user/user.service';
 import { LoginDto } from 'src/user/dto/login.dto';
+import { UpdateUserDto } from 'src/user/dto/update-profile.dto';
+import { User, UserDocument } from './schema/user.schema';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { ChangePasswordDto } from 'src/user/dto/change-password.dto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
   constructor(
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
     private userService: UserService,
     private jwtService: JwtService,
   ) {}
@@ -110,10 +123,55 @@ export class AuthService {
       email: user.email,
       fullName: user.fullName,
       phone: user.phone,
+      address: user.address,
+      city: user.city,
       role: user.role,
     };
 
     const jwt = await this.jwtService.sign(payload);
     return { token: jwt };
+  }
+
+  async updateProfile(
+    userId: string,
+    updateData: UpdateUserDto,
+  ): Promise<User> {
+    const updatedUser = await this.userModel.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { new: true, runValidators: true },
+    );
+
+    if (!updatedUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    return updatedUser;
+  }
+
+  async changePassword(
+    userId: string,
+    changePasswordDto: ChangePasswordDto,
+  ): Promise<User> {
+    const { oldPassword, newPassword } = changePasswordDto;
+
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) {
+      throw new UnauthorizedException('Old password is incorrect');
+    }
+
+    if (oldPassword === newPassword) {
+      throw new BadRequestException('Mật khẩu mới phải khác mật khẩu cũ');
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+
+    user.password = hashedNewPassword;
+    return user.save();
   }
 }

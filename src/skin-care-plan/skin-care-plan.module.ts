@@ -1,32 +1,26 @@
 import { Module } from '@nestjs/common';
-import { SkinCarePlanService } from './skin-care-plan.service';
-import { SkinCarePlanController } from './skin-care-plan.controller';
 import { MongooseModule } from '@nestjs/mongoose';
-import {
-  SkinTestResult,
-  SkinTestResultSchema,
-} from 'src/skin-test-result/schema/skin-test-result.schema';
-import { Question, QuestionSchema } from 'src/questions/schema/question.schema';
-import { User, UserSchema } from 'src/auth/schema/user.schema';
-import { Product, ProductSchema } from 'src/product/schema/product.schema';
+import { SkinCarePlanController } from './skin-care-plan.controller';
+import { SkinCarePlanService } from './skin-care-plan.service';
 import {
   SkinCarePlan,
   SkinCarePlanSchema,
-} from './entities/skin-care-plan.entity';
-import { CacheModule } from '@nestjs/cache-manager';
+} from './schema/skin-care-plan.schema';
+import { Product, ProductSchema } from '../product/schema/product.schema';
+import { CommonModule } from '../common/modules/common.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
-      { name: SkinTestResult.name, schema: SkinTestResultSchema },
-      { name: Question.name, schema: QuestionSchema },
-      { name: User.name, schema: UserSchema },
-      { name: Product.name, schema: ProductSchema },
       { name: SkinCarePlan.name, schema: SkinCarePlanSchema },
+      { name: Product.name, schema: ProductSchema },
     ]),
-    CacheModule.register(),
+    CommonModule,
+    AuthModule,
   ],
   controllers: [SkinCarePlanController],
   providers: [SkinCarePlanService],
+  exports: [SkinCarePlanService],
 })
 export class SkinCarePlanModule {}

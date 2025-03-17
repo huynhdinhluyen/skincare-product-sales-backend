@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsEnum,
   IsMongoId,
   IsNotEmpty,
   IsNumber,
@@ -8,6 +9,7 @@ import {
   Min,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { SkinType } from '../../../skin-care-plan/enum/skin-type.enum';
 
 export class CreateProductDto {
   @IsString()
@@ -36,6 +38,28 @@ export class CreateProductDto {
     required: false,
   })
   images?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsEnum(SkinType, { each: true })
+  @ApiProperty({
+    example: [SkinType.OILY, SkinType.COMBINATION],
+    description: 'Suitable skin types for this product',
+    required: false,
+    enum: SkinType,
+    isArray: true,
+  })
+  skinTypes?: string[];
+
+  @IsOptional()
+  @IsString()
+  @ApiProperty({
+    example:
+      'AHAs/Glycolic Acid, Anti-oxidants, BHAs/Salicylic Acid, Collagen, Fragrance-free, Paraben-free, Peptides, Squalane, Sulphate-free, Vitamins',
+    description: 'Product ingredients',
+    required: false,
+  })
+  ingredients?: string;
 
   @IsString()
   @ApiProperty({
@@ -69,15 +93,6 @@ export class CreateProductDto {
     required: false,
   })
   stockQuantity?: number;
-
-  @IsNumber()
-  @IsOptional()
-  @ApiProperty({
-    example: 25,
-    description: 'Number of units sold',
-    required: false,
-  })
-  sold?: number;
 
   @IsString()
   @IsOptional()

@@ -7,10 +7,14 @@ import { Category, CategorySchema } from 'src/category/schema/category.schema';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { AuthModule } from 'src/auth/auth.module';
+import { CommonModule } from '../common/modules/common.module';
+import { SkinTestResultModule } from '../skin-test-result/skin-test-result.module';
 
 @Module({
   imports: [
     AuthModule,
+    CommonModule,
+    SkinTestResultModule,
     MongooseModule.forFeature([
       { name: Product.name, schema: ProductSchema },
       { name: Category.name, schema: CategorySchema },

@@ -4,14 +4,17 @@ import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as compression from 'compression';
+import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import { HttpExceptionFilter } from './common/exceptions/http-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.use(compression());
   app.useGlobalPipes(
     new ValidationPipe({
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
       whitelist: true,
-      forbidNonWhitelisted: true,
     }),
   );
 
@@ -26,9 +29,19 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
 
-  SwaggerModule.setup('api/v1', app, document);
+  SwaggerModule.setup('api/v1', app, document, {
+    swaggerOptions: {
+      persistAuthorization: true,
+      docExpansion: 'none',
+      filter: true,
+      tagsSorter: 'alpha',
+      operationsSorter: 'alpha',
+    },
+  });
 
   app.use(helmet());
+  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalInterceptors(new ResponseInterceptor());
   app.enableCors({
     origin: ['http://localhost:5173', 'http://localhost:8081'],
     methods: 'GET,PUT,PATCH,POST,DELETE',

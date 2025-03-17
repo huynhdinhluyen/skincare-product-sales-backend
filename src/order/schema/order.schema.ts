@@ -1,6 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import mongoose from 'mongoose';
-import { User } from 'src/auth/schema/user.schema';
+import mongoose, { Document, Types } from 'mongoose';
 import { OrderDetails, OrderDetailsSchema } from './order-details.schema';
 import { Order_Status } from '../enums/order-status.enum';
 
@@ -9,7 +8,7 @@ import { Order_Status } from '../enums/order-status.enum';
 })
 export class Order {
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true })
-  user: User;
+  user: Types.ObjectId;
 
   @Prop({ type: [OrderDetailsSchema], required: true })
   items: OrderDetails[];
@@ -26,12 +25,31 @@ export class Order {
   @Prop({ type: Number, default: 0 })
   shippingFee: number;
 
+  @Prop({ type: Object })
+  shippingAddress?: {
+    addressLine1: string;
+    addressLine2?: string;
+    city: string;
+    province: string;
+    phone: string;
+  };
+
   @Prop({ type: String, enum: Order_Status, default: Order_Status.PENDING })
   orderStatus: Order_Status;
 
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Payment' })
-  payment: mongoose.Schema.Types.ObjectId;
+  payment: Types.ObjectId;
+
+  @Prop({ type: String })
+  cancellationReason?: string;
+
+  @Prop({ type: String })
+  note?: string;
+
+  @Prop({ type: Date })
+  estimatedDeliveryDate?: Date;
 }
 
 export type OrderDocument = Order & Document;
 export const OrderSchema = SchemaFactory.createForClass(Order);
+OrderSchema.index({ createdAt: 1, orderStatus: 1 });

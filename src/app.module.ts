@@ -17,6 +17,8 @@ import { TransactionModule } from './transaction/transaction.module';
 import { QuestionsModule } from './questions/questions.module';
 import { SkinTestResultModule } from './skin-test-result/skin-test-result.module';
 import { SkinCarePlanModule } from './skin-care-plan/skin-care-plan.module';
+import { FeedbackModule } from './feedback/feedback.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -26,8 +28,8 @@ import { SkinCarePlanModule } from './skin-care-plan/skin-care-plan.module';
     }),
     CacheModule.register({
       isGlobal: true,
-      ttl: 3600,
-      max: 100,
+      ttl: 3600, // 1 hour cache expiration
+      max: 1000, // Maximum number of items in cache
     }),
     ThrottlerModule.forRoot([
       {
@@ -35,7 +37,7 @@ import { SkinCarePlanModule } from './skin-care-plan/skin-care-plan.module';
         limit: 100,
       },
     ]),
-    MongooseModule.forRoot(process.env.DB_URI),
+    MongooseModule.forRoot(process.env.DB_URI, { autoIndex: true }),
     ProductModule,
     CategoryModule,
     AuthModule,
@@ -47,6 +49,8 @@ import { SkinCarePlanModule } from './skin-care-plan/skin-care-plan.module';
     SkinTestResultModule,
     PromotionModule,
     SkinCarePlanModule,
+    FeedbackModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [

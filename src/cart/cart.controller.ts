@@ -15,35 +15,27 @@ import { AuthGuard } from '@nestjs/passport';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { Role } from 'src/auth/enums/role.enum';
 import { RolesGuard } from 'src/auth/guards/role.guards';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiParam, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Cart')
 @ApiBearerAuth()
-@Controller('cart')
+@Controller('carts')
 export class CartController {
   constructor(private readonly cartService: CartService) {}
 
-  @Get(':userId')
-  @Roles(Role.CUSTOMER)
-  @UseGuards(AuthGuard(), RolesGuard)
-  async getCart(@Param('userid') userId: string) {
-    return this.cartService.getCart(userId);
-  }
-
   @Post()
+  @Roles(Role.CUSTOMER)
   @UseGuards(AuthGuard())
   async addToCart(@Body() addToCartDto: AddToCartDto) {
     return this.cartService.addToCart(addToCartDto);
   }
 
-  @Delete(':userId/items/:productId')
+  @Get(':userId')
   @Roles(Role.CUSTOMER)
-  @UseGuards(AuthGuard(), RolesGuard)
-  async removeFromCart(
-    @Param('userId') userId: string,
-    @Param('productId') productId: string,
-  ) {
-    return this.cartService.removeFromCart(userId, productId);
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @ApiParam({ name: 'userId', description: 'User ID' })
+  async getCart(@Param('userId') userId: string) {
+    return this.cartService.getCart(userId);
   }
 
   @Put(':userId/items/:productId')
@@ -59,5 +51,15 @@ export class CartController {
       productId,
       updateCartDto,
     );
+  }
+
+  @Delete(':userId/items/:productId')
+  @Roles(Role.CUSTOMER)
+  @UseGuards(AuthGuard(), RolesGuard)
+  async removeFromCart(
+    @Param('userId') userId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.cartService.removeFromCart(userId, productId);
   }
 }
