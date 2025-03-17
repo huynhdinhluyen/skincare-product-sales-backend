@@ -6,6 +6,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/role.guards';
 import { Role } from '../auth/enums/role.enum';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { GetAllUsersQueryDto } from './dto/filter/filter-user.dto';
 
 @ApiTags('Users')
 @Controller('user')
@@ -20,12 +21,9 @@ export class UserController {
     summary: 'Get all users',
     description: 'Retrieves all users with pagination and filtering',
   })
-  async getAllUsers(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-    @Query('search') search?: string,
-  ) {
-    return await this.userService.getAllUsers(page, limit, search);
+  async getAllUsers(@Query() query: GetAllUsersQueryDto) {
+    const { page, limit, search } = query;
+    return this.userService.getAllUsers(page, limit, search);
   }
 
   @Get(':id')
