@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { PromotionDto } from '../../../promotion/dto/response/promotion.dto';
 import { CategoryDto } from '../../../category/dto/response/category.dto';
+import { SkinType } from '../../../skin-care-plan/enum/skin-type.enum';
 
 export class ProductResponseDto {
   @ApiProperty({
@@ -29,6 +30,33 @@ export class ProductResponseDto {
     ],
   })
   images: string[];
+
+  @ApiProperty({
+    description: 'Types of skin this product is suitable for',
+    example: ['OILY', 'COMBINATION'],
+    enum: SkinType,
+    isArray: true,
+  })
+  skinTypes: string[];
+
+  @ApiProperty({
+    description: 'Product ingredients',
+    example: ['Water', 'Glycerin', 'Niacinamide', 'Hyaluronic Acid'],
+    required: false,
+  })
+  ingredients: string[];
+
+  @ApiProperty({
+    description: 'Average product rating (1-5)',
+    example: 4.5,
+  })
+  averageRating: number;
+
+  @ApiProperty({
+    description: 'Number of reviews',
+    example: 24,
+  })
+  reviewCount: number;
 
   @ApiProperty({
     description: 'Country of origin',

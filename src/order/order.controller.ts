@@ -6,6 +6,8 @@ import {
   Param,
   Patch,
   Post,
+  Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -19,10 +21,10 @@ import {
   ApiBearerAuth,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { GetUser } from '../auth/decorators/user.decorator';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 
 @ApiTags('Orders')
@@ -39,7 +41,9 @@ export class OrderController {
     status: 400,
     description: 'Invalid order data or insufficient stock',
   })
-  async createOrder(@Body() createOrderDto: CreateOrderDto, @GetUser() user) {
+  async createOrder(@Body() createOrderDto: CreateOrderDto, @Req() req) {
+    const user = req.user;
+
     if (
       user.role !== Role.MANAGER &&
       user.role !== Role.STAFF &&
@@ -48,19 +52,26 @@ export class OrderController {
       throw new Error('You can only create orders for your own account');
     }
 
-    return {
-      success: true,
-      data: await this.orderService.createOrder(createOrderDto),
-      message: 'Order created successfully',
-    };
+    return await this.orderService.createOrder(createOrderDto);
   }
 
   @Get('user/:userId')
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Get all orders for a user' })
   @ApiParam({ name: 'userId', description: 'User ID' })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    description: 'Filter by order status',
+  })
   @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
-  async getOrders(@Param('userId') userId: string, @GetUser() user) {
+  async getOrders(
+    @Param('userId') userId: string,
+    @Query('status') status: Order_Status,
+    @Req() req,
+  ) {
+    const user = req.user;
+
     if (
       user.role !== Role.MANAGER &&
       user.role !== Role.STAFF &&
@@ -69,11 +80,9 @@ export class OrderController {
       throw new Error('You can only view your own orders');
     }
 
-    return {
-      success: true,
-      data: await this.orderService.getOrders(userId),
-      message: 'Orders retrieved successfully',
-    };
+    return status
+      ? await this.orderService.getOrdersByUserAndStatus(userId, status)
+      : await this.orderService.getOrders(userId);
   }
 
   @Get(':orderId')
@@ -85,17 +94,16 @@ export class OrderController {
     description: 'Order details retrieved successfully',
   })
   @ApiResponse({ status: 404, description: 'Order not found' })
-  async getOrder(@Param('orderId') orderId: string, @GetUser() user) {
+  async getOrder(@Param('orderId') orderId: string, @Req() req) {
+    const user = req.user;
     const order = await this.orderService.getOrderById(orderId);
 
-    // Fix the permission check with proper ObjectId handling
     const orderUserId = order.user
       ? typeof order.user === 'object' && order.user._id
         ? order.user._id.toString()
         : order.user.toString()
       : null;
 
-    // Only check permissions for regular users, not staff/managers
     if (
       user.role !== Role.MANAGER &&
       user.role !== Role.STAFF &&
@@ -104,11 +112,7 @@ export class OrderController {
       throw new Error('You can only view your own orders');
     }
 
-    return {
-      success: true,
-      data: order,
-      message: 'Order details retrieved successfully',
-    };
+    return order;
   }
 
   @Get('status/:status')
@@ -118,11 +122,7 @@ export class OrderController {
   @ApiParam({ name: 'status', description: 'Order status' })
   @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
   async getOrderByStatus(@Param('status') status: Order_Status) {
-    return {
-      success: true,
-      data: await this.orderService.getOrderByStatus(status),
-      message: `Orders with status ${status} retrieved successfully`,
-    };
+    return await this.orderService.getOrderByStatus(status);
   }
 
   @Patch(':orderId/status')
@@ -142,14 +142,10 @@ export class OrderController {
     @Param('orderId') orderId: string,
     @Body() updateStatusDto: UpdateOrderStatusDto,
   ) {
-    return {
-      success: true,
-      data: await this.orderService.updateOrderStatus(
-        orderId,
-        updateStatusDto.status,
-      ),
-      message: `Order status updated to ${updateStatusDto.status}`,
-    };
+    return await this.orderService.updateOrderStatus(
+      orderId,
+      updateStatusDto.status,
+    );
   }
 
   @Delete(':orderId')
@@ -160,9 +156,6 @@ export class OrderController {
   @ApiResponse({ status: 200, description: 'Order deleted successfully' })
   @ApiResponse({ status: 400, description: 'Cannot delete order in process' })
   async deleteOrder(@Param('orderId') orderId: string) {
-    return {
-      success: true,
-      message: await this.orderService.deleteOrder(orderId),
-    };
+    return await this.orderService.deleteOrder(orderId);
   }
 }
