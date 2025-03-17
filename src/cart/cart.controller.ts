@@ -24,6 +24,7 @@ export class CartController {
   constructor(private readonly cartService: CartService) {}
 
   @Post()
+  @Roles(Role.CUSTOMER)
   @UseGuards(AuthGuard())
   async addToCart(@Body() addToCartDto: AddToCartDto) {
     return this.cartService.addToCart(addToCartDto);
