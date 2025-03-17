@@ -12,7 +12,6 @@ import {
 } from '@nestjs/common';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderService } from './order.service';
-import { Order_Status } from './enums/order-status.enum';
 import { AuthGuard } from '@nestjs/passport';
 import { Role } from 'src/auth/enums/role.enum';
 import { Roles } from 'src/auth/decorators/roles.decorator';
@@ -21,11 +20,11 @@ import {
   ApiBearerAuth,
   ApiOperation,
   ApiParam,
-  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { OrderFilterDto } from './dto/filter/order-filter.dto';
 
 @ApiTags('Orders')
 @ApiBearerAuth()
@@ -55,34 +54,19 @@ export class OrderController {
     return await this.orderService.createOrder(createOrderDto);
   }
 
-  @Get('user/:userId')
+  @Get()
   @UseGuards(AuthGuard('jwt'))
-  @ApiOperation({ summary: 'Get all orders for a user' })
-  @ApiParam({ name: 'userId', description: 'User ID' })
-  @ApiQuery({
-    name: 'status',
-    required: false,
-    description: 'Filter by order status',
+  @ApiOperation({
+    summary: 'Get all orders with filtering and pagination',
+    description: 'Retrieve orders with optional filtering by status and user',
   })
   @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
-  async getOrders(
-    @Param('userId') userId: string,
-    @Query('status') status: Order_Status,
-    @Req() req,
-  ) {
+  async getAllOrders(@Query() filterDto: OrderFilterDto, @Req() req) {
     const user = req.user;
-
-    if (
-      user.role !== Role.MANAGER &&
-      user.role !== Role.STAFF &&
-      userId !== user.id
-    ) {
-      throw new Error('You can only view your own orders');
+    if (user.role !== Role.MANAGER && user.role !== Role.STAFF) {
+      filterDto.userId = user.id;
     }
-
-    return status
-      ? await this.orderService.getOrdersByUserAndStatus(userId, status)
-      : await this.orderService.getOrders(userId);
+    return this.orderService.getAllOrders(filterDto);
   }
 
   @Get(':orderId')
@@ -113,16 +97,6 @@ export class OrderController {
     }
 
     return order;
-  }
-
-  @Get('status/:status')
-  @Roles(Role.MANAGER, Role.STAFF)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @ApiOperation({ summary: 'Get all orders by status' })
-  @ApiParam({ name: 'status', description: 'Order status' })
-  @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
-  async getOrderByStatus(@Param('status') status: Order_Status) {
-    return await this.orderService.getOrderByStatus(status);
   }
 
   @Patch(':orderId/status')
