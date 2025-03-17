@@ -1,13 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from 'src/auth/schema/user.schema';
 import { UserDetails } from './user-details.interface';
 import { UpdateUserDto } from './dto/update-profile.dto';
+import { Order, OrderDocument } from '../order/schema/order.schema';
+import { Order_Status } from '../order/enums/order-status.enum';
 
 @Injectable()
 export class UserService {
-  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+  private readonly logger = new Logger(UserService.name);
+
+  constructor(
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(Order.name) private readonly orderModel: Model<OrderDocument>,
+  ) {}
 
   getUserDetails(user: UserDocument) {
     return {
@@ -46,6 +53,81 @@ export class UserService {
       role: role,
     });
     return newUser.save();
+  }
+
+  async getAllUsers(
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+  ): Promise<{
+    data: any[];
+    totalCount: number;
+    totalPages: number;
+    currentPage: number;
+  }> {
+    const query: any = {};
+
+    if (search) {
+      query.$or = [
+        { fullName: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { phone: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [users, totalCount] = await Promise.all([
+      this.userModel
+        .find(query)
+        .select('-password -__v')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      this.userModel.countDocuments(query),
+    ]);
+
+    const usersWithStats = await Promise.all(
+      users.map(async (user) => {
+        const orderStats = await this.orderModel.aggregate([
+          { $match: { user: user._id } },
+          {
+            $group: {
+              _id: null,
+              orderCount: { $sum: 1 },
+              totalSpent: {
+                $sum: {
+                  $cond: [
+                    { $eq: ['$orderStatus', Order_Status.DELIVERED] },
+                    '$totalPrice',
+                    0,
+                  ],
+                },
+              },
+            },
+          },
+        ]);
+
+        return {
+          ...user,
+          orderStats:
+            orderStats.length > 0
+              ? {
+                  orderCount: orderStats[0].orderCount,
+                  totalSpent: orderStats[0].totalSpent,
+                }
+              : { orderCount: 0, totalSpent: 0 },
+        };
+      }),
+    );
+
+    return {
+      data: usersWithStats,
+      totalCount,
+      totalPages: Math.ceil(totalCount / limit),
+      currentPage: page,
+    };
   }
 
   async findByEmail(email: string): Promise<UserDocument | null> {
