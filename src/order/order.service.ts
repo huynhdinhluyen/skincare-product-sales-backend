@@ -22,6 +22,7 @@ import { OrderFilterDto, OrderSortBy } from './dto/filter/order-filter.dto';
 @Injectable()
 export class OrderService {
   private readonly logger = new Logger(OrderService.name);
+
   constructor(
     @InjectModel(Order.name) private readonly orderModel: Model<OrderDocument>,
     @InjectModel(Product.name)

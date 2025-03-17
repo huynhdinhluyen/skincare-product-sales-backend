@@ -133,6 +133,25 @@ export class CartService {
     return cart.save();
   }
 
+  async removeFromCart(userId: string, productId: string): Promise<Cart> {
+    const cart = await this.cartModel.findOne({ user: userId });
+    if (!cart) {
+      throw new NotFoundException('Cart not found');
+    }
+
+    const existingItemIndex = cart.items.findIndex(
+      (item) => item.product.toString() === productId,
+    );
+
+    if (existingItemIndex === -1) {
+      throw new NotFoundException('Product not found in cart');
+    }
+
+    cart.items.splice(existingItemIndex, 1);
+    await this.updateCartTotal(cart);
+    return cart.save();
+  }
+
   private async updateCartTotal(cart: CartDocument): Promise<void> {
     let totalPrice = 0;
 
@@ -161,25 +180,6 @@ export class CartService {
     }
 
     cart.totalPrice = Math.round(totalPrice * 100) / 100;
-  }
-
-  async removeFromCart(userId: string, productId: string): Promise<Cart> {
-    const cart = await this.cartModel.findOne({ user: userId });
-    if (!cart) {
-      throw new NotFoundException('Cart not found');
-    }
-
-    const existingItemIndex = cart.items.findIndex(
-      (item) => item.product.toString() === productId,
-    );
-
-    if (existingItemIndex === -1) {
-      throw new NotFoundException('Product not found in cart');
-    }
-
-    cart.items.splice(existingItemIndex, 1);
-    await this.updateCartTotal(cart);
-    return cart.save();
   }
 
   private processCartItems(cart: any): Cart {
