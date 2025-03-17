@@ -17,6 +17,8 @@ import { TransactionModule } from './transaction/transaction.module';
 import { QuestionsModule } from './questions/questions.module';
 import { SkinTestResultModule } from './skin-test-result/skin-test-result.module';
 import { SkinCarePlanModule } from './skin-care-plan/skin-care-plan.module';
+import { FeedbackModule } from './feedback/feedback.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -47,6 +49,8 @@ import { SkinCarePlanModule } from './skin-care-plan/skin-care-plan.module';
     SkinTestResultModule,
     PromotionModule,
     SkinCarePlanModule,
+    FeedbackModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [
