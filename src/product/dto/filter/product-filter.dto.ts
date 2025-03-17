@@ -1,4 +1,4 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEnum,
   IsMongoId,
@@ -10,6 +10,7 @@ import {
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { SkinType } from '../../../skin-care-plan/enum/skin-type.enum';
 
 export class ProductFilterDto {
   @ApiPropertyOptional({ description: 'Page number', minimum: 1 })
@@ -42,6 +43,15 @@ export class ProductFilterDto {
   @IsOptional()
   @IsMongoId()
   categoryId?: string;
+
+  @IsOptional()
+  @IsEnum(SkinType)
+  @ApiProperty({
+    required: false,
+    enum: SkinType,
+    description: 'Filter products by skin type',
+  })
+  skinType?: string;
 
   @ApiPropertyOptional({ description: 'Minimum price filter' })
   @IsOptional()

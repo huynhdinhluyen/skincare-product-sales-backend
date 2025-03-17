@@ -29,12 +29,17 @@ import { CreateProductDto } from './dto/request/create-product.dto';
 import { ProductFilterDto } from './dto/filter/product-filter.dto';
 import { CompareProductsDto } from './dto/request/compare-product.dto';
 import { ProductResponseDto } from './dto/response/product.dto';
+import { SkinType } from '../skin-care-plan/enum/skin-type.enum';
+import { SkinTestResultService } from '../skin-test-result/skin-test-result.service';
 
 @ApiTags('Products')
 @ApiBearerAuth()
 @Controller('products')
 export class ProductController {
-  constructor(private readonly productService: ProductService) {}
+  constructor(
+    private readonly productService: ProductService,
+    private readonly skinTestResultService: SkinTestResultService,
+  ) {}
 
   @Post()
   @Roles(Role.MANAGER)
@@ -86,6 +91,13 @@ export class ProductController {
     name: 'categoryId',
     description: 'Filter by category ID',
     required: false,
+  })
+  @ApiQuery({
+    name: 'skinType',
+    description:
+      'Filter by skin type (e.g., OILY, DRY, COMBINATION, NORMAL, SENSITIVE)',
+    required: false,
+    enum: SkinType,
   })
   @ApiQuery({
     name: 'minPrice',

@@ -55,6 +55,7 @@ export class ProductService {
       limit = 10,
       search,
       categoryId,
+      skinType,
       minPrice,
       maxPrice,
       sortBy = 'createdAt',
@@ -66,6 +67,7 @@ export class ProductService {
       limit,
       search: search || '',
       categoryId: categoryId || '',
+      skinType: skinType || '',
       minPrice: minPrice || 0,
       maxPrice: maxPrice || 0,
       sortBy,
@@ -96,6 +98,10 @@ export class ProductService {
         filter.category = categoryId;
       }
 
+      if (skinType) {
+        filter.skinTypes = skinType;
+      }
+
       if (minPrice !== undefined) {
         filter.price = { $gte: minPrice };
       }
@@ -117,13 +123,22 @@ export class ProductService {
         this.productModel
           .find(filter)
           .select(
-            'name brand images price stockQuantity sold description category promotionId capacity origin',
+            'name brand images skinTypes price stockQuantity sold description category promotionId capacity origin ingredients averageRating reviewCount feedback',
           )
           .sort(sort)
           .skip(skip)
           .limit(limit)
           .populate('promotionId', 'discountRate startDate endDate isActive')
           .populate('category', 'name')
+          .populate({
+            path: 'feedback',
+            select: 'rating content createdAt',
+            options: { limit: 3, sort: { createdAt: -1 } },
+            populate: {
+              path: 'author',
+              select: 'fullName',
+            },
+          })
           .lean()
           .exec(),
         this.productModel.countDocuments(filter).exec(),
@@ -160,7 +175,7 @@ export class ProductService {
     const product = await this.productModel
       .findById(id)
       .select(
-        'name brand images price stockQuantity sold description category promotionId capacity origin createdAt updatedAt',
+        'name brand images skinTypes ingredients price stockQuantity sold description category promotionId capacity origin createdAt updatedAt averageRating reviewCount feedback',
       )
       .populate('category', 'name _id')
       .populate('promotionId', 'discountRate startDate endDate isActive')
@@ -173,8 +188,7 @@ export class ProductService {
 
     const processedProduct = this.applyPromotion(product);
 
-    await this.cacheManager.set(cacheKey, product, 3600);
-
+    await this.cacheManager.set(cacheKey, processedProduct, 3600);
     return processedProduct;
   }
 
@@ -268,12 +282,13 @@ export class ProductService {
   }
 
   private formatProductsForComparison(products: any[]): any[] {
-    // Process products for comparison with all relevant attributes
     return products.map((product) => ({
       _id: product._id,
       name: product.name,
       brand: product.brand,
       images: product.images,
+      skinTypes: product.skinTypes || [],
+      ingredients: product.ingredients || [],
       origin: product.origin,
       capacity: product.capacity,
       originalPrice: product.originalPrice,
@@ -282,6 +297,8 @@ export class ProductService {
       sold: product.sold,
       description: product.description,
       category: product.category ? product.category.name : 'N/A',
+      averageRating: product.averageRating || 0,
+      reviewCount: product.reviewCount || 0,
       promotion: product.promotionId
         ? `${product.promotionId.discountRate}% off`
         : 'No promotion',

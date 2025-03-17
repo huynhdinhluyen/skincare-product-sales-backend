@@ -126,6 +126,7 @@ export class SkinCarePlanService {
       this.productModel
         .find({
           category: { $in: categoryIds },
+          skinTypes: skinTypeUpper,
           isActive: true,
         })
         .skip(skip)
@@ -136,6 +137,7 @@ export class SkinCarePlanService {
         .exec(),
       this.productModel.countDocuments({
         category: { $in: categoryIds },
+        skinTypes: skinTypeUpper,
         isActive: true,
       }),
     ]);
