@@ -101,7 +101,7 @@ export class OrderController {
   }
 
   @Patch(':orderId/status')
-  @Roles(Role.MANAGER, Role.STAFF)
+  @Roles(Role.MANAGER, Role.STAFF, Role.CUSTOMER)
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiOperation({
     summary: 'Update order status',
